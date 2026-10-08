@@ -41,6 +41,17 @@ const INJECTION_SIGNALS = [
   /new\s+(system\s+)?(prompt|role|instructions?)\b/i,
   /<\s*\/?\s*(system|assistant|user)\s*>/i,
   /\[\s*(INST|\/INST|SYSTEM)\s*\]/i,
+
+  // Portuguese. Every classifier signal in this project is bilingual; these
+  // were not, so an attack written in the language half the corpus is written
+  // in passed straight through and got a drafted reply.
+  /ignor[ae]\s+(as\s+|todas\s+as\s+)?(instru(ç|c)(õ|o)es|ordens|regras)\s+(anteriores|acima|pr(é|e)vias)/i,
+  /desconsider[ae]\s+(o\s+|as\s+|tudo\s+)?(acima|anterior|anteriores)/i,
+  /esque(ç|c)a\s+(o\s+|as\s+|tudo\s+)?(acima|anterior|que\s+foi\s+dito|as\s+instru(ç|c)(õ|o)es)/i,
+  /voc(ê|e)\s+(agora\s+)?(é|e|ser(á|a))\s+(um|uma)/i,
+  /nov[ao]\s+(prompt|papel|fun(ç|c)(ã|a)o|instru(ç|c)(õ|o)es|sistema)/i,
+  /responda\s+(apenas|somente|s(ó|o))\s+/i,
+  /fim\s+dos\s+dados/i,
 ];
 
 /** Collapse a single-line untrusted value (titles, labels, usernames). */
@@ -51,6 +62,14 @@ export function sanitizeLine(value: string | null | undefined, max = MAX_TITLE, 
     .replace(/[\r\n\t]+/g, ' ')
     .replace(STRUCTURE_CHARS, '')
     .replace(/`/g, "'")
+    // The guillemets are ours: they mark where untrusted text starts and ends,
+    // and the system prompt declares whatever sits between them inert. A value
+    // that carries its own closes the slot early and puts the rest of itself
+    // outside, which is the whole attack. sanitizeBody has always done this;
+    // sanitizeLine did not, so a crafted title escaped while a crafted body
+    // could not. Titles are the easier field to control, which made it the
+    // worse of the two to miss.
+    .replace(/[«»]/g, '"')
     .replace(/\s{2,}/g, ' ')
     .trim();
   if (!cleaned) return empty;

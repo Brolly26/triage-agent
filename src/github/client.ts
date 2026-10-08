@@ -107,11 +107,25 @@ export function pauseFromHeaders(headers: Headers, now: number = Date.now()): { 
     }
     // Retry-After may also be an HTTP date.
     const when = Date.parse(retryAfter);
-    if (!Number.isNaN(when)) return { ms: Math.max(0, Math.min(when - now, 120000)), reason: 'retry_after' };
+    if (!Number.isNaN(when)) {
+      // A past date, or `Retry-After: 0`, yields ms 0 — a truthy pause of no
+      // duration, which replaces exponential backoff with a tight retry loop
+      // against a server that has just asked us to slow down.
+      const ms = Math.max(0, Math.min(when - now, 120000));
+      return ms > 0 ? { ms, reason: 'retry_after' } : null;
+    }
   }
 
-  const remaining = Number(headers.get('x-ratelimit-remaining'));
-  const reset = Number(headers.get('x-ratelimit-reset'));
+  // Number(null) is 0, so reading an ABSENT x-ratelimit-remaining as a number
+  // makes a missing header indistinguishable from an exhausted quota, and the
+  // crawler sleeps up to two minutes per page for nothing. Proxies, GHE and
+  // cache layers all drop these headers. Ask whether they are there first.
+  const rawRemaining = headers.get('x-ratelimit-remaining');
+  const rawReset = headers.get('x-ratelimit-reset');
+  if (rawRemaining === null || rawReset === null) return null;
+
+  const remaining = Number(rawRemaining);
+  const reset = Number(rawReset);
   if (Number.isFinite(remaining) && remaining <= QUOTA_FLOOR && Number.isFinite(reset)) {
     // Reset is a UTC epoch in SECONDS.
     const ms = reset * 1000 - now;

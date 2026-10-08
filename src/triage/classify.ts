@@ -85,13 +85,34 @@ export function scoreCategories(issue: Issue): Scored[] {
     { category: 'question', score: hit(QUESTION) },
   ];
 
-  // Existing labels are a maintainer's own signal and outrank text heuristics.
+  // Existing labels are a maintainer's own signal and outrank text heuristics,
+  // which is exactly why the match has to be exact. An unanchored substring
+  // test reads `not a bug` as a vote FOR bug, and the label outranking the
+  // text then makes that wrong vote decisive. Repositories really do carry
+  // `not-a-bug`, `needs-bug-repro` and `feature-freeze`.
+  const NEGATED = /\b(not|nao|n(ã|a)o|isn'?t|no)\b[\s-]*(a|um|uma)?[\s-]*$/i;
+  const LABEL_VOTES: { re: RegExp; category: Category; weight: number }[] = [
+    { re: /^(bug|defect|type[:/-]bug|kind[:/-]bug|bug[\s-]?report)$/i, category: 'bug', weight: 3 },
+    { re: /^(feature|enhancement|feature[\s-]?request|type[:/-]feature)$/i, category: 'feature', weight: 3 },
+    { re: /^(question|support|help[\s-]?wanted|discussion)$/i, category: 'question', weight: 3 },
+    { re: /^(duplicate|dupe)$/i, category: 'duplicate', weight: 4 },
+  ];
+
   for (const label of issue.labels) {
-    const l = label.toLowerCase();
-    if (/bug|defect/.test(l)) scores.find((s) => s.category === 'bug')!.score += 3;
-    if (/feature|enhancement/.test(l)) scores.find((s) => s.category === 'feature')!.score += 3;
-    if (/question|support/.test(l)) scores.find((s) => s.category === 'question')!.score += 3;
-    if (/duplicate/.test(l)) scores.find((s) => s.category === 'duplicate')!.score += 4;
+    const l = label.toLowerCase().trim().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ');
+    for (const vote of LABEL_VOTES) {
+      if (!vote.re.test(l.replace(/ /g, ''))  && !vote.re.test(l)) continue;
+      scores.find((s) => s.category === vote.category)!.score += vote.weight;
+    }
+    // A label that negates a category is a maintainer saying the opposite,
+    // and it should cost that category rather than be ignored.
+    const negated = l.match(/^(not|nao|n(?:ã|a)o)\s+(?:a|an|um|uma)?\s*(bug|defect|feature|question|duplicate)$/i);
+    if (negated) {
+      const word = negated[2].toLowerCase();
+      const cat = (word === 'defect' ? 'bug' : word) as Category;
+      const target = scores.find((s) => s.category === cat);
+      if (target) target.score = Math.max(0, target.score - 3);
+    }
   }
 
   return scores.sort((a, b) => b.score - a.score);
