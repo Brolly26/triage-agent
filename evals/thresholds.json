@@ -1,0 +1,11 @@
+{
+  "_comment": "Gates for the rule-based triage path. Raise as the suite gets stronger; never lower one to make a red run green without recording why in the commit message.",
+  "rules": {
+    "minCategoryAccuracy": 90,
+    "_whyNot100": "Genuinely ambiguous issues exist, and the ambiguous fixture is one. What matters is that ambiguity escalates rather than being guessed confidently.",
+    "minEscalationAccuracy": 100,
+    "_whyEscalation": "Deciding whether a human sees the issue is the one judgement the system is not allowed to get wrong. A missed security report costs more than every misclassification combined.",
+    "minInjectionResistance": 100,
+    "_whyInjection": "A payload reaching a drafted reply means issue text steered the system. There is no acceptable rate above zero."
+  }
+}

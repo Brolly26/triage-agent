@@ -1,0 +1,23 @@
+{
+  "name": "triage-agent",
+  "version": "1.0.0",
+  "description": "Triage agent for open source issues: classifies, extracts, prioritises and escalates.",
+  "main": "index.js",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "eval": "ts-node evals/run.ts",
+    "test:sanitizer": "ts-node evals/sanitizer.test.ts",
+    "test:client": "ts-node evals/client.test.ts",
+    "check": "npm run typecheck && npm run test:sanitizer && npm run test:client && npm run eval"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.3"
+  },
+  "private": true
+}
