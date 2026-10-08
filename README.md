@@ -159,6 +159,46 @@ evals/
 
 ---
 
+## What the real API changed
+
+The eval suite injects `fetch`, which is right for CI but means every
+assumption about the real API is only an assumption. `scripts/smoke.ts` crawls
+two busy repositories unauthenticated and prints what it actually saw:
+
+```
+npx ts-node scripts/smoke.ts            # microsoft/vscode, denoland/deno
+```
+
+The run confirmed the collector. Pagination followed 2 and 3 pages through the
+`Link` header. Pull requests arriving through the issues endpoint were filtered
+out — 27 of them in one repo, 41 in the other, which is more noise than signal
+and would have silently polluted the triage. One oversized body was truncated
+and flagged.
+
+It also found something the fixtures could not:
+
+| | 10 fixtures | 80 real issues |
+|---|---|---|
+| escalated as `low_confidence` | 10% | **45–55%** |
+
+Half the batch escalates. A triage system that hands half its input to a human
+has not earned its place, so `CONFIDENCE_THRESHOLD = 0.6` is miscalibrated for
+real traffic — the fixtures were written to be clearly classifiable, and real
+issues are mostly not.
+
+The threshold has deliberately **not** been retuned. Picking a number that
+makes 80 unlabelled issues look better is fitting to noise, and it is the exact
+move this project's `CLAUDE.md` forbids. Calibrating it needs a few hundred
+labelled real issues, which is the same work the limitations below already
+name as the next step.
+
+The distributions differ sharply between repositories too — vscode came back
+75% bugs, deno split roughly evenly between bugs and questions. A threshold
+tuned on one would not transfer to the other, which suggests calibration
+belongs per repository rather than globally.
+
+---
+
 ## Known limitations
 
 - **The model path is not implemented.** `classifyWithModel` throws.
@@ -176,4 +216,8 @@ evals/
   search over existing issues, which is the obvious next feature.
 - **Priority is heuristic.** `p0` on security or data loss is defensible;
   the split between `p1` and `p2` on comment count is a guess that no data
-  supports yet.
+  supports yet. The real crawl bears this out: 90% of what it saw landed on
+  `p2`, so the heuristic is barely discriminating at all.
+- **The confidence threshold is miscalibrated.** See above: it escalates
+  roughly half of real traffic. Known, measured, and not yet fixed, because
+  fixing it properly needs labelled data rather than a tuned constant.
