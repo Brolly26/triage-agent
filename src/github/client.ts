@@ -195,6 +195,11 @@ async function requestWithRetry(
     } catch (err: any) {
       // Network-level failure: retryable.
       lastError = new GitHubError(String(err?.message ?? err), null, true);
+      // Sleeping after the final attempt buys nothing: the loop exits and
+      // throws regardless. With Retry-After at 120s that was two wasted
+      // minutes on every doomed request, four in total, with the caller
+      // printing nothing the whole time.
+      if (attempt === maxAttempts - 1) break;
       const ms = backoffMs(attempt);
       opts.onEvent?.({ type: 'retry', attempt, ms, status: null });
       await sleep(ms);
@@ -224,6 +229,7 @@ async function requestWithRetry(
         : { type: 'retry', attempt, ms, status: res.status }
     );
     lastError = new GitHubError(`GitHub returned ${res.status}`, res.status, true);
+    if (attempt === maxAttempts - 1) break;
     await sleep(ms);
   }
 

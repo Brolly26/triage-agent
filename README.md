@@ -169,39 +169,68 @@ two busy repositories unauthenticated and prints what it actually saw:
 npx ts-node scripts/smoke.ts            # microsoft/vscode, denoland/deno
 ```
 
-The run confirmed the collector. Pagination followed 2 and 3 pages through the
-`Link` header. Pull requests arriving through the issues endpoint were filtered
-out — 27 of them in one repo, 41 in the other, which is more noise than signal
-and would have silently polluted the triage. One oversized body was truncated
-and flagged.
+It confirmed the collector. Pagination followed the `Link` header across
+pages. Pull requests arriving through the issues endpoint were filtered out —
+24 and 38 of them — which is more noise than signal and would have silently
+polluted the triage. Oversized bodies were truncated and flagged.
 
-It also found something the fixtures could not:
+Then it found the thing that matters, and the fixtures could not have.
 
-| | 10 fixtures | 80 real issues |
+### The rule-based classifier does not work on real issues
+
+Scoring 80 real issues from two busy repositories:
+
+| | |
+|---|---|
+| median winning score | **1** |
+| 25th percentile | **0** — a quarter match nothing in the vocabulary at all |
+| reach score ≥ 4 | **6%** |
+| uncontested (margin 1.0) | 44% |
+
+The keyword vocabulary barely fires. It fires reliably on the ten fixtures
+because the fixtures were written out of the same vocabulary — the suite was
+validating its own assumptions, which is the failure mode a suite is supposed
+to prevent.
+
+This surfaced while fixing a separate defect. Confidence was pure margin,
+`(top - second) / top`, which returns 1.0 whenever the runner-up is zero — so
+a single weak match with nothing to contest it scored **maximum** confidence
+and was auto-drafted. Confidence now multiplies margin by evidence strength,
+which is correct and made the number worse:
+
+| | margin only | margin × strength |
 |---|---|---|
-| escalated as `low_confidence` | 10% | **45–55%** |
+| escalated as `low_confidence` | ~50% | **90%** |
 
-Half the batch escalates. A triage system that hands half its input to a human
-has not earned its place, so `CONFIDENCE_THRESHOLD = 0.6` is miscalibrated for
-real traffic — the fixtures were written to be clearly classifiable, and real
-issues are mostly not.
+Both are true readings of the same system. The first was flattering because
+44% of real issues are uncontested, and uncontested was being read as certain.
+The second is honest: on real traffic this classifier usually does not know.
 
-The threshold has deliberately **not** been retuned. Picking a number that
-makes 80 unlabelled issues look better is fitting to noise, and it is the exact
-move this project's `CLAUDE.md` forbids. Calibrating it needs a few hundred
-labelled real issues, which is the same work the limitations below already
-name as the next step.
+A system that escalates 90% has not earned its place, and the constant is
+deliberately **not** tuned to improve the number — fitting `STRONG_EVIDENCE`
+to 80 unlabelled issues is fitting to noise, and it is the move `CLAUDE.md`
+forbids. What the measurement actually argues is that keyword scoring is the
+wrong floor for this problem, and that the model path is not a nicety here but
+the point. Calibrating properly needs a few hundred labelled real issues,
+which is the next step the limitations below already name.
+
+Escalating too often is also the safe direction. The previous behaviour drafted
+confident replies off one weak keyword match; this one hands them to a human.
 
 The distributions differ sharply between repositories too — vscode came back
-75% bugs, deno split roughly evenly between bugs and questions. A threshold
-tuned on one would not transfer to the other, which suggests calibration
-belongs per repository rather than globally.
+mostly bugs, deno split evenly between bugs and questions — which suggests
+calibration belongs per repository rather than globally.
 
 ---
 
 ## Known limitations
 
 - **The model path is not implemented.** `classifyWithModel` throws.
+- **The fixtures validate their own assumptions.** They were written out of
+  the same keyword vocabulary the classifier scores with, so they report a
+  health the real measurement contradicts: median winning score 1 against
+  their 4+. Labelling a few hundred real issues is the only fix, and it is the
+  next thing worth doing to this repo.
 - **Ten fixtures is a small sample.** Precision and recall at this size are
   indicative, not reliable. The next step is sampling a few hundred real
   issues and labelling them.

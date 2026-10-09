@@ -166,10 +166,21 @@ export function classifyWithRules(issue: Issue): Triage {
   else if (SECURITY.test(text)) escalationReason = 'security_report';
   else if (!issue.body.trim()) escalationReason = 'empty_body';
 
-  // Confidence: margin between first and second, normalised. A zero top score
-  // means nothing matched at all, which is minimum confidence by definition.
-  const confidence =
-    top.score === 0 ? 0 : Math.min(1, (top.score - second.score) / Math.max(top.score, 1) * 0.7 + 0.3);
+  // Confidence has to answer two questions, and the first version only asked
+  // one. Margin alone — (top - second) / top — returns 1.0 whenever the runner
+  // up is zero, so "Thanks for the library / Any help appreciated", one weak
+  // body match and nothing else, scored maximum confidence and was auto
+  // drafted. Uncontested is not the same as well evidenced.
+  //
+  //   margin   how decisively the winner beat the runner-up
+  //   strength how much evidence there was to beat it with
+  //
+  // Both must hold. A lone weak signal is now low confidence and escalates,
+  // which is the honest answer: the system does not know.
+  const STRONG_EVIDENCE = 4;
+  const margin = top.score === 0 ? 0 : (top.score - second.score) / top.score;
+  const strength = Math.min(1, top.score / STRONG_EVIDENCE);
+  const confidence = margin * strength;
 
   if (!escalationReason && confidence < CONFIDENCE_THRESHOLD) escalationReason = 'low_confidence';
 
