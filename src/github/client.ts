@@ -102,17 +102,17 @@ export function pauseFromHeaders(headers: Headers, now: number = Date.now()): { 
   const retryAfter = headers.get('retry-after');
   if (retryAfter) {
     const secs = Number(retryAfter);
-    if (Number.isFinite(secs) && secs >= 0) {
+    if (Number.isFinite(secs) && secs > 0) {
       return { ms: Math.min(secs * 1000, 120000), reason: 'retry_after' };
     }
     // Retry-After may also be an HTTP date.
-    const when = Date.parse(retryAfter);
+    const when = Number.isFinite(secs) ? NaN : Date.parse(retryAfter);
     if (!Number.isNaN(when)) {
       // A past date, or `Retry-After: 0`, yields ms 0 — a truthy pause of no
       // duration, which replaces exponential backoff with a tight retry loop
       // against a server that has just asked us to slow down.
       const ms = Math.max(0, Math.min(when - now, 120000));
-      return ms > 0 ? { ms, reason: 'retry_after' } : null;
+      if (ms > 0) return { ms, reason: 'retry_after' };
     }
   }
 
@@ -177,6 +177,13 @@ async function requestWithRetry(
   opts: FetchOptions,
   maxAttempts = 4
 ): Promise<Response> {
+  let target: URL;
+  try { target = new URL(url); } catch {
+    throw new GitHubError('invalid pagination URL', null, false);
+  }
+  if (target.origin !== 'https://api.github.com' || target.username || target.password) {
+    throw new GitHubError('untrusted pagination URL', null, false);
+  }
   const doFetch = opts.fetchImpl ?? fetch;
   const sleep = opts.sleepImpl ?? defaultSleep;
   const headers: Record<string, string> = {

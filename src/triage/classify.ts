@@ -21,13 +21,13 @@ export const PROMPT_VERSION = 'v1-2026-10-08-skeleton';
 
 // --- signals ---------------------------------------------------------------
 
-const BUG = /\b(bug|erro|error|crash|falha|quebr|brok(e|en)|fail|exception|traceback|stack\s?trace|regress|n[ãa]o funciona|doesn'?t work|not working|unexpected)\b/i;
+const BUG = /\b(bugs?|erros?|errors?|crash(?:es|ed|ing)?|falhas?|quebr[\p{L}]*|brok(e|en)|fail(?:s|ed|ing|ures?)?|exceptions?|traceback|stack\s?trace|regress[\p{L}]*|n[ãa]o funciona|doesn'?t work|not working|unexpected)\b/iu;
 const FEATURE = /\b(feature|request|proposal|rfc|seria (bom|legal)|would be (nice|great)|please add|suporte a|support for|enhancement|sugest)\b/i;
 const QUESTION = /\b(como|how do i|how can i|is it possible|d[úu]vida|question|help|ajuda|why does|por que)\b|\?\s*$/im;
 const DUPLICATE = /\b(duplicate|duplicad|same as|j[áa] (foi )?report|see #\d+|mesmo que #\d+)\b/i;
 
-const SECURITY = /\b(vulnerab|CVE-\d{4}-\d+|XSS|CSRF|SQL\s?injection|RCE|exploit|security\s+(issue|report|advisory))\b/i;
-const SEVERE = /\b(data\s?loss|perda de dados|corrup|production\s+(down|outage)|cannot\s+start|unusable|segfault)\b/i;
+const SECURITY = /\b(vulnerab[\p{L}]*|CVE-\d{4}-\d+|XSS|CSRF|SQL\s?injection|RCE|exploit[\p{L}]*|security\s+(issue|report|advisory))\b/iu;
+const SEVERE = /\b(data\s?loss|perda de dados|corrup[\p{L}]*|production\s+(down|outage)|cannot\s+start|unusable|segfault)\b/iu;
 
 const STACK_TRACE = /(^\s+at\s+.+:\d+|Traceback \(most recent call last\)|^\s*File ".+", line \d+|Exception in thread)/m;
 const REPRO_STEPS = /\b(steps?\s+to\s+reproduce|passos?\s+para\s+reproduzir|reproduction|repro:|to reproduce)\b/i;
@@ -90,7 +90,6 @@ export function scoreCategories(issue: Issue): Scored[] {
   // test reads `not a bug` as a vote FOR bug, and the label outranking the
   // text then makes that wrong vote decisive. Repositories really do carry
   // `not-a-bug`, `needs-bug-repro` and `feature-freeze`.
-  const NEGATED = /\b(not|nao|n(ã|a)o|isn'?t|no)\b[\s-]*(a|um|uma)?[\s-]*$/i;
   const LABEL_VOTES: { re: RegExp; category: Category; weight: number }[] = [
     { re: /^(bug|defect|type[:/-]bug|kind[:/-]bug|bug[\s-]?report)$/i, category: 'bug', weight: 3 },
     { re: /^(feature|enhancement|feature[\s-]?request|type[:/-]feature)$/i, category: 'feature', weight: 3 },
@@ -165,6 +164,7 @@ export function classifyWithRules(issue: Issue): Triage {
   if (looksLikeInjection(text)) escalationReason = 'suspected_injection';
   else if (SECURITY.test(text)) escalationReason = 'security_report';
   else if (!issue.body.trim()) escalationReason = 'empty_body';
+  else if (issue.bodyTruncated) escalationReason = 'truncated_body';
 
   // Confidence has to answer two questions, and the first version only asked
   // one. Margin alone — (top - second) / top — returns 1.0 whenever the runner

@@ -56,6 +56,7 @@ export interface Triage {
 export type EscalationReason =
   | 'low_confidence'
   | 'empty_body'
+  | 'truncated_body'
   | 'suspected_injection'
   | 'security_report'
   | 'model_unavailable';

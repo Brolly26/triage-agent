@@ -10,7 +10,7 @@ deliberate, and the reason is below.
 
 ```bash
 npm install
-npm run check   # typecheck + sanitizer + client + evals. No API key, no network.
+npm run check   # typecheck + sanitizer + client + triage + evals. No API key, no network.
 ```
 
 ---
@@ -21,8 +21,8 @@ A classifier is easy to demo and hard to trust. The question that decides
 whether it can run unattended is not "does it work on this issue?" but "which
 mistakes does it make, and what do they cost?"
 
-So the measurable parts came first: ten hand-labelled fixtures, a confusion
-matrix, per-class precision and recall, and gates in CI. When the model is
+So the measurable parts came first: hand-labelled fixtures and targeted
+regression cases, a confusion matrix, per-class precision and recall, and gates in CI. When the model is
 wired up it will be scored against the same fixtures as the rules, which
 answers a question most LLM features never answer — how much does the model
 actually add over the cheap deterministic path?
@@ -70,14 +70,16 @@ order:
 | `suspected_injection` | the text addresses the system rather than a human |
 | `security_report` | CVE, XSS, RCE, "vulnerability", "exploit" |
 | `empty_body` | nothing to triage |
+| `truncated_body` | the collector discarded part of the report |
 | `low_confidence` | the margin between the top two categories is too small |
 
 An escalated issue gets **no drafted reply at all**. A draft is the one
 artifact a reader might act on without checking, so the system does not
 produce one when it has already admitted it is unsure.
 
-Confidence is the *margin* between the top two categories, not the top raw
-score. An issue that reads equally like a bug and a question is genuinely
+Confidence combines the *margin* between the top two categories with evidence
+strength; a single uncontested keyword is insufficient. An issue that reads
+equally like a bug and a question is genuinely
 ambiguous and belongs with a human, even though it matched something strongly.
 
 Gates live in `evals/thresholds.json` with the reasoning beside each number.
@@ -108,6 +110,10 @@ One thing differs from a simpler sanitiser: **issue bodies legitimately
 contain code fences and newlines**, and stripping them would destroy the stack
 traces that make a bug report useful. So fences are neutralised as structure
 while surviving as content — the content stays, the delimiter goes.
+
+Delimiters and character removal are prompt formatting defenses, not a proof
+of resistance to semantic prompt injection. The model path still needs
+adversarial evaluation before it can handle issues unattended.
 
 Detection (`looksLikeInjection`) exists too, but it never filters or rewrites.
 It only escalates to a human, which is the response a cleverer payload cannot
@@ -150,10 +156,11 @@ src/
   shared/untrustedInput.ts  hardening for third-party text
   triage/classify.ts        deterministic triage + prompt builder + model skeleton
 evals/
-  fixtures.ts               10 hand-labelled issues with ground truth
+  fixtures.ts               labelled cases and vocabulary regressions
   run.ts                    confusion matrix, precision/recall, gates
   sanitizer.test.ts         26 structural assertions
-  client.test.ts            29 checks on the collector, no network
+  client.test.ts            40 checks on the collector, no network
+  triage.test.ts            5 truncation and escalation regressions
   thresholds.json
 ```
 
@@ -208,8 +215,7 @@ The second is honest: on real traffic this classifier usually does not know.
 
 A system that escalates 90% has not earned its place, and the constant is
 deliberately **not** tuned to improve the number — fitting `STRONG_EVIDENCE`
-to 80 unlabelled issues is fitting to noise, and it is the move `CLAUDE.md`
-forbids. What the measurement actually argues is that keyword scoring is the
+to 80 unlabelled issues is fitting to noise, which would hide the lack of labelled evidence. What the measurement actually argues is that keyword scoring is the
 wrong floor for this problem, and that the model path is not a nicety here but
 the point. Calibrating properly needs a few hundred labelled real issues,
 which is the next step the limitations below already name.
@@ -231,7 +237,7 @@ calibration belongs per repository rather than globally.
   health the real measurement contradicts: median winning score 1 against
   their 4+. Labelling a few hundred real issues is the only fix, and it is the
   next thing worth doing to this repo.
-- **Ten fixtures is a small sample.** Precision and recall at this size are
+- **The fixture set is small.** Precision and recall at this size are
   indicative, not reliable. The next step is sampling a few hundred real
   issues and labelling them.
 - **Fixtures are shaped after real issues, not sampled from production.** They
@@ -248,5 +254,26 @@ calibration belongs per repository rather than globally.
   supports yet. The real crawl bears this out: 90% of what it saw landed on
   `p2`, so the heuristic is barely discriminating at all.
 - **The confidence threshold is miscalibrated.** See above: it escalates
-  roughly half of real traffic. Known, measured, and not yet fixed, because
+  roughly 90% of the historical real-traffic sample after the evidence-strength
+  correction. That sample predates the vocabulary fixes. This remains unresolved:
+ 
   fixing it properly needs labelled data rather than a tuned constant.
+
+
+## Regression checks and CI
+
+The offline suite currently contains 21 fixtures, 26 sanitizer checks, 40 client
+checks, and 5 triage regression cases. Every failing fixture now fails the run;
+aggregate thresholds remain additional gates, computed without rounding.
+Every escalated fixture must have no draft, and security/corruption cases assert
+priority explicitly.
+
+Collection truncation always requires human review. A visible injection or
+security signal keeps its more specific reason. Invalid or nonpositive
+Retry-After values fall back to quota headers or exponential backoff. Pagination
+URLs must use the HTTPS GitHub API origin and contain no credentials before any
+request is sent, including its authorization header.
+
+GitHub Actions runs npm ci and npm run check on pushes and pull requests using
+Node.js 22. The typecheck includes the smoke script. Historical traffic numbers
+above are observations from the original crawl, not measurements of this revision.

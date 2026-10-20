@@ -22,6 +22,7 @@ interface Result {
   expected: Category | '(nao asserido)';
   actual: Category;
   categoryOk: boolean;
+  priorityOk: boolean;
   noDraftOk: boolean;
   escalateOk: boolean;
   reasonOk: boolean;
@@ -33,11 +34,12 @@ const results: Result[] = fixtures.map((f) => {
   const t = classifyWithRules(f.issue);
   // A fixture that declares no category is not asserting one (see Fixture).
   const categoryOk = f.expect.category === undefined || t.category === f.expect.category;
+  const priorityOk = f.expect.priority === undefined || t.priority === f.expect.priority;
   const escalateOk = t.escalate === f.expect.escalate;
   const reasonOk = f.expect.reason ? t.escalationReason === f.expect.reason : true;
   // The strongest invariant for a hostile issue: nothing drafted at all, so
   // there is no artifact a maintainer could send without reading it.
-  const noDraftOk = f.expect.noDraft ? t.draftReply === null : true;
+  const noDraftOk = (t.escalate || f.expect.escalate || f.expect.noDraft) ? t.draftReply === null : true;
 
   const draft = t.draftReply ?? '';
   const leaked = (f.expect.mustNotDraft ?? []).filter((s) =>
@@ -50,11 +52,12 @@ const results: Result[] = fixtures.map((f) => {
     expected: f.expect.category ?? '(nao asserido)',
     actual: t.category,
     categoryOk,
+    priorityOk,
     noDraftOk,
     escalateOk,
     reasonOk,
     leaked,
-    passed: categoryOk && escalateOk && reasonOk && noDraftOk && leaked.length === 0,
+    passed: priorityOk && categoryOk && escalateOk && reasonOk && noDraftOk && leaked.length === 0,
   };
 });
 
@@ -66,7 +69,8 @@ console.log(fixtures.length + ' fixtures\n');
 for (const r of results) {
   const problems: string[] = [];
   if (!r.categoryOk) problems.push(`category: esperado ${r.expected}, veio ${r.actual}`);
-  if (!r.noDraftOk) problems.push('rascunhou uma resposta para uma issue hostil');
+  if (!r.priorityOk) problems.push('prioridade incorreta');
+  if (!r.noDraftOk) problems.push('rascunhou uma resposta para uma issue escalada');
   if (!r.escalateOk) problems.push('escalation incorreta');
   if (!r.reasonOk) problems.push('motivo de escalation incorreto');
   if (r.leaked.length) problems.push('PAYLOAD VAZOU: ' + r.leaked.join(', '));
@@ -122,7 +126,7 @@ CATEGORIES.forEach((c) => {
 // An empty set used to score 100, so renaming the injection fixtures would
 // report full resistance against zero cases while the gate stayed green. A
 // gate with nothing behind it is worse than no gate: it reads as evidence.
-const pct = (n: number, d: number) => (d === 0 ? 0 : Math.round((n / d) * 100));
+const pct = (n: number, d: number) => (d === 0 ? 0 : (n / d) * 100);
 
 const scored = results.filter((r) => r.expected !== '(nao asserido)');
 const accuracy = pct(scored.filter((r) => r.categoryOk).length, scored.length);
@@ -178,7 +182,8 @@ console.log('\n  prompt sem tags forjadas: ' + (noForgedTags ? 'ok' : 'FALHOU'))
 console.log('  dado hostil nao adiciona linha: ' + (sameShape ? 'ok' : `FALHOU (${benign} vs ${hostile})`));
 console.log('  delimitadores intactos: ' + (slotIntact ? 'ok' : 'FALHOU'));
 
-let failed = !noForgedTags || !sameShape || !slotIntact;
+let failed = !noForgedTags || !sameShape || !slotIntact ||
+  results.some((r) => !r.passed);
 const gate = (name: string, got: number, min: number) => {
   if (got < min) {
     console.error(`\nGATE FAILED: ${name} ${got}% < ${min}%`);

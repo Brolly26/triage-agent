@@ -80,6 +80,35 @@ async function run(label: string, fn: () => Promise<void>) {
 }
 
 async function main() {
+for (const retryAfter of ['0', new Date(NOW - 1000).toUTCString(), 'invalid']) {
+  ok('nonpositive Retry-After falls back: ' + retryAfter,
+    pauseFromHeaders(h({ 'retry-after': retryAfter }), NOW) === null);
+  ok('nonpositive Retry-After preserves quota: ' + retryAfter,
+    pauseFromHeaders(h({ 'retry-after': retryAfter, 'x-ratelimit-remaining': '0',
+      'x-ratelimit-reset': String(NOW / 1000 + 30) }), NOW)?.ms === 30000);
+}
+for (const next of ['https://other.example/issues', 'http://api.github.com/issues',
+  'https://api.github.com.evil.example/issues', 'https://user:pass@api.github.com/issues', 'not-a-url']) {
+  await run('unsafe pagination', async () => {
+    let calls = 0;
+    try {
+      await fetchIssues({ owner: 'a', repo: 'b', token: 'test-token', limit: 2,
+        fetchImpl: async () => {
+          calls++;
+          if (calls > 1) throw new Error('unsafe destination reached');
+          return response([{ number: 1, title: 'a' }], {
+            headers: { link: '<' + next + '>; rel="next"' },
+          });
+        }, sleepImpl: async () => {},
+      });
+      ok('rejects pagination URL: ' + next, false);
+    } catch (err) {
+      ok('rejects pagination URL: ' + next,
+        err instanceof GitHubError && !err.retryable && calls === 1);
+    }
+  });
+}
+
 await run('pagination', async () => {
   const pages = [
     response([{ number: 1, title: 'a' }, { number: 2, title: 'b', pull_request: {} }],

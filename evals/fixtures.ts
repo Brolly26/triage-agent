@@ -1,4 +1,4 @@
-import { Issue, Category, EscalationReason } from '../src/shared/types';
+import { Issue, Category, EscalationReason, Priority } from '../src/shared/types';
 
 /**
  * Hand-labelled fixtures.
@@ -28,6 +28,7 @@ export interface Fixture {
      * below.
      */
     category?: Category;
+    priority?: Priority;
     /** Must the issue reach a human? */
     escalate: boolean;
     /** Must the system refuse to draft a reply at all? */
@@ -201,3 +202,29 @@ export const fixtures: Fixture[] = [
     expect: { category: 'bug', escalate: false },
   },
 ];
+
+// Variants must stand alone: XSS or CVE in the same text would hide a miss.
+for (const title of ['Vulnerability in parser', 'Vulnerabilidade no parser', 'Bug: exploitable input', 'Vulnerabilities in parser']) {
+  fixtures.push({
+    id: 'security-' + fixtures.length,
+    intent: 'Security vocabulary must escalate without a CVE or acronym.',
+    issue: issue({ title, body: 'The parser accepts untrusted input.', labels: ['bug'] }),
+    expect: { category: 'bug', priority: 'p0', escalate: true, reason: 'security_report' },
+  });
+}
+for (const title of ['Database corruption', 'Database corrupted', 'Corrupção no banco']) {
+  fixtures.push({
+    id: 'corruption-' + fixtures.length,
+    intent: 'Corruption must receive critical priority without the words data loss.',
+    issue: issue({ title, body: 'Records were overwritten.', labels: ['bug'] }),
+    expect: { category: 'bug', priority: 'p0', escalate: false },
+  });
+}
+for (const title of ['App crashes', 'Falhas ao abrir', 'Regression on startup']) {
+  fixtures.push({
+    id: 'bug-inflection-' + fixtures.length,
+    intent: 'Common inflections count as bug evidence without a supporting label.',
+    issue: issue({ title, body: 'This occurs on every launch.' }),
+    expect: { category: 'bug', escalate: true, reason: 'low_confidence' },
+  });
+}
