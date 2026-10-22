@@ -2,23 +2,76 @@
 
 [![Check](https://github.com/Brolly26/triage-agent/actions/workflows/check.yml/badge.svg)](https://github.com/Brolly26/triage-agent/actions/workflows/check.yml)
 
-Triages issues from a busy open source repository: classifies them, pulls out
-the structured facts, assigns a priority, drafts a reply, and escalates to a
-human when it should not decide alone.
+A triage classifier for GitHub issues that knows when not to decide alone.
 
-Status: the deterministic path, the collector and the eval suite work, and
-the model path is wired to the Claude API with offline tests for its failure
-modes. **The model has not been scored yet**: that needs a key, and the numbers
-will go here when it has been run, not before. The evals came first on
-purpose; the reason is below.
+Given an issue, it says whether it is a `bug`, `feature`, `question` or
+`duplicate`, extracts the facts a maintainer needs (version, platform, repro
+steps, stack trace), assigns a priority and drafts a reply. When it should not
+decide, it hands the issue to a human instead, and drafts nothing.
+
+## What this is, and what it is not
+
+It is a TypeScript library plus the tooling to measure it: a collector for the
+GitHub API, a rule-based classifier, a Claude-backed classifier, and an eval
+suite that scores both against the same ground truth. It runs from the
+terminal.
+
+It is **not** a deployed service, a web app or a GitHub App. There is no
+server, no UI and nothing running anywhere. The point of the repo is the part
+that usually gets skipped: how you find out whether a classifier like this can
+be trusted.
+
+## How it works
+
+```
+GitHub API ──► collector ──► sanitiser ──► classifier ──► escalation guards ──► triage
+ (issues)     pagination,    clamps and    rules, or      injection, security,   category, priority,
+              rate limits,   delimits      Claude         empty, truncated,      facts, draft reply
+              retries        issue text    (category +    low confidence         or "send to a human"
+                                           confidence)
+```
+
+1. **Collect.** Pull issues from the public API: pagination, both rate limits,
+   backoff, pull requests filtered out, oversized bodies flagged.
+2. **Sanitise.** Issue text is written by strangers, so it is clamped and
+   wrapped in delimiters before it can reach a prompt.
+3. **Classify.** Either the deterministic rules, or Claude, which decides only
+   the category and its own confidence.
+4. **Guard.** The same escalation checks run on both paths. Priority, extracted
+   facts and the reply template are deterministic, so nothing the model writes
+   can reach a reply.
+
+## Status
+
+| | |
+|---|---|
+| Collector, sanitiser, rule-based classifier, eval suite | working, tested offline in CI |
+| Claude path | wired and tested offline for its failure modes; **not scored yet**, because that needs an API key. The numbers go here once it has been run. |
+| CLI, GitHub Action, demo page | not built |
+
+## Run it
+
+Needs Node 22+.
 
 ```bash
 npm install
-npm run check      # typecheck + sanitizer + client + triage + model + evals. No API key, no network.
+npm run check      # typecheck + all tests + evals. No API key, no network.
 
-# Rules vs model on the same ground truth. Key goes in .env (see .env.example).
-npm run eval:llm                          # the fixtures
-npm run eval:llm -- --live microsoft/vscode   # real closed issues, labelled by maintainers
+npx ts-node scripts/smoke.ts microsoft/vscode   # crawl real issues, no token (60 requests/hour)
+
+# Rules vs Claude on the same ground truth. Copy .env.example to .env and set ANTHROPIC_API_KEY.
+npm run eval:llm                                # the fixtures
+npm run eval:llm -- --live microsoft/vscode     # real closed issues, labelled by maintainers
+```
+
+As a library:
+
+```ts
+import { classifyWithRules, classifyWithModel } from './src/triage/classify';
+
+const triage = classifyWithRules(issue);          // offline, deterministic
+const viaModel = await classifyWithModel(issue);  // needs ANTHROPIC_API_KEY
+// { category, confidence, priority, extracted, draftReply, escalate, escalationReason, path }
 ```
 
 ---
@@ -30,8 +83,8 @@ whether it can run unattended is not "does it work on this issue?" but "which
 mistakes does it make, and what do they cost?"
 
 So the measurable parts came first: hand-labelled fixtures and targeted
-regression cases, a confusion matrix, per-class precision and recall, and gates in CI. When the model is
-wired up it will be scored against the same fixtures as the rules, which
+regression cases, a confusion matrix, per-class precision and recall, and gates in CI. The model is
+scored against the same fixtures as the rules, which
 answers a question most LLM features never answer — how much does the model
 actually add over the cheap deterministic path?
 
@@ -162,13 +215,17 @@ src/
   github/client.ts          pagination, rate limits, retries, normalisation
   shared/types.ts           domain types, source-agnostic
   shared/untrustedInput.ts  hardening for third-party text
-  triage/classify.ts        deterministic triage + prompt builder + model skeleton
+  triage/classify.ts        rules, prompt builder, Claude path, escalation guards
+scripts/
+  smoke.ts                  crawl real issues and report what the collector saw
 evals/
   fixtures.ts               labelled cases and vocabulary regressions
-  run.ts                    confusion matrix, precision/recall, gates
-  sanitizer.test.ts         26 structural assertions
-  client.test.ts            40 checks on the collector, no network
-  triage.test.ts            5 truncation and escalation regressions
+  run.ts                    confusion matrix, precision/recall, gates (rules, offline)
+  llm.ts                    rules vs Claude, on fixtures or real labelled issues
+  sanitizer.test.ts         structural assertions on the prompt
+  client.test.ts            the collector, no network
+  triage.test.ts            truncation and escalation regressions
+  model.test.ts             the Claude path with a fake transport: validation, fallback, guards
   thresholds.json
 ```
 
@@ -202,7 +259,7 @@ Scoring 80 real issues from two busy repositories:
 | reach score ≥ 4 | **6%** |
 | uncontested (margin 1.0) | 44% |
 
-The keyword vocabulary barely fires. It fires reliably on the ten fixtures
+The keyword vocabulary barely fires. It fires reliably on the fixtures
 because the fixtures were written out of the same vocabulary — the suite was
 validating its own assumptions, which is the failure mode a suite is supposed
 to prevent.
@@ -223,7 +280,8 @@ The second is honest: on real traffic this classifier usually does not know.
 
 A system that escalates 90% has not earned its place, and the constant is
 deliberately **not** tuned to improve the number — fitting `STRONG_EVIDENCE`
-to 80 unlabelled issues is fitting to noise, which would hide the lack of labelled evidence. What the measurement actually argues is that keyword scoring is the
+to 80 unlabelled issues is fitting to noise, which would hide the lack of
+labelled evidence. What the measurement actually argues is that keyword scoring is the
 wrong floor for this problem, and that the model path is not a nicety here but
 the point. Calibrating properly needs a few hundred labelled real issues,
 which is the next step the limitations below already name.
@@ -309,15 +367,17 @@ column.
   `p2`, so the heuristic is barely discriminating at all.
 - **The confidence threshold is miscalibrated.** See above: it escalates
   roughly 90% of the historical real-traffic sample after the evidence-strength
-  correction. That sample predates the vocabulary fixes. This remains unresolved:
- 
+  correction. That sample predates the vocabulary fixes. This remains unresolved;
   fixing it properly needs labelled data rather than a tuned constant.
 
 
+---
+
 ## Regression checks and CI
 
-The offline suite currently contains 21 fixtures, 26 sanitizer checks, 40 client
-checks, 5 triage regression cases and 18 model-path checks. Every failing fixture now fails the run;
+The offline suite covers the fixtures plus the sanitizer, client, triage and
+model-path checks (`npm run check` prints the counts). Every failing fixture
+fails the run;
 aggregate thresholds remain additional gates, computed without rounding.
 Every escalated fixture must have no draft, and security/corruption cases assert
 priority explicitly.
