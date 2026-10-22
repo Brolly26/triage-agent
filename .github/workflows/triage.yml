@@ -1,0 +1,23 @@
+name: Triage
+on:
+  issues:
+    types: [opened]
+permissions:
+  contents: read
+  issues: write
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # The issue is read from the event payload file, not interpolated here.
+      - run: npx ts-node src/action.ts
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Optional. Without it the rules run; with it, Claude does.
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}

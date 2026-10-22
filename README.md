@@ -48,7 +48,8 @@ GitHub API ──► collector ──► sanitiser ──► classifier ──�
 | Collector, sanitiser, rule-based classifier, eval suite | working, tested offline in CI |
 | Claude path | wired and tested offline for its failure modes; **not scored yet**, because that needs an API key. The numbers go here once it has been run. |
 | CLI (`npm run triage`) | working, one issue at a time |
-| GitHub Action, demo page | not built |
+| GitHub Action (`.github/workflows/triage.yml`) | built and tested offline; **not yet run on a live issue** |
+| Demo page | not built |
 
 ## Run it
 
@@ -78,6 +79,26 @@ const triage = classifyWithRules(issue);          // offline, deterministic
 const viaModel = await classifyWithModel(issue);  // needs ANTHROPIC_API_KEY
 // { category, confidence, priority, extracted, draftReply, escalate, escalationReason, path }
 ```
+
+---
+
+## Using it on a repository
+
+`.github/workflows/triage.yml` runs when an issue is opened and **only adds
+labels**: `triage:<category>`, `priority:<p>`, and `needs-human` when the issue
+was escalated. It never comments, closes or edits anything, because a label is
+cheap to undo and a posted reply is not.
+
+- Copy the workflow and `src/` into a repository, or fork this one.
+- With no secrets it runs the rules, which is the path this repo has measured.
+- Add an `ANTHROPIC_API_KEY` repository secret and it runs Claude instead,
+  with the same guards.
+- The issue is read from the event payload file, never interpolated into a
+  shell command, so a hostile title cannot become a command.
+- Try it without touching GitHub: `DRY_RUN=true GITHUB_EVENT_PATH=event.json GITHUB_REPOSITORY=o/r npx ts-node src/action.ts`.
+
+Given what the measurements say, expect most issues to land on `needs-human`
+until the model has been scored; that is the system being honest, not broken.
 
 ---
 
@@ -218,6 +239,7 @@ modes you cannot reproduce on demand against the real API.
 ```
 src/
   cli.ts                    triage one issue from the terminal
+  action.ts                 label a newly opened issue (GitHub Actions entry point)
   github/client.ts          pagination, rate limits, retries, normalisation
   shared/types.ts           domain types, source-agnostic
   shared/untrustedInput.ts  hardening for third-party text
@@ -232,6 +254,7 @@ evals/
   client.test.ts            the collector, no network
   triage.test.ts            truncation and escalation regressions
   cli.test.ts               target parsing, single-issue fetch, output format
+  action.test.ts            labels derived from the triage, never from issue text
   model.test.ts             the Claude path with a fake transport: validation, fallback, guards
   thresholds.json
 ```
