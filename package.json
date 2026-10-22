@@ -2,7 +2,6 @@
   "name": "triage-agent",
   "version": "1.0.0",
   "description": "Triage agent for open source issues: classifies, extracts, prioritises and escalates.",
-  "main": "index.js",
   "scripts": {
     "typecheck": "tsc --noEmit",
     "eval": "ts-node evals/run.ts",
@@ -11,8 +10,15 @@
     "check": "npm run typecheck && npm run test:sanitizer && npm run test:client && npm run test:triage && npm run eval",
     "test:triage": "ts-node evals/triage.test.ts"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "github",
+    "issue-triage",
+    "evals",
+    "llm",
+    "prompt-injection",
+    "typescript"
+  ],
+  "author": "Gabriel Augusto",
   "license": "ISC",
   "type": "commonjs",
   "devDependencies": {
@@ -20,5 +26,12 @@
     "ts-node": "^10.9.2",
     "typescript": "^5.7.3"
   },
-  "private": true
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Brolly26/triage-agent"
+  },
+  "engines": {
+    "node": ">=22"
+  }
 }

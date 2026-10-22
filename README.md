@@ -1,5 +1,7 @@
 # triage-agent
 
+[![Check](https://github.com/Brolly26/triage-agent/actions/workflows/check.yml/badge.svg)](https://github.com/Brolly26/triage-agent/actions/workflows/check.yml)
+
 Triages issues from a busy open source repository: classifies them, pulls out
 the structured facts, assigns a priority, drafts a reply, and escalates to a
 human when it should not decide alone.
