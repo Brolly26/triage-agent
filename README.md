@@ -49,7 +49,7 @@ GitHub API ──► collector ──► sanitiser ──► classifier ──�
 | Claude path | wired and tested offline for its failure modes; **not scored yet**, because that needs an API key. The numbers go here once it has been run. |
 | CLI (`npm run triage`) | working, one issue at a time |
 | GitHub Action (`.github/workflows/triage.yml`) | built and tested offline; **not yet run on a live issue** |
-| Demo page | not built |
+| Results page (`docs/index.html`) | built from a real run; regenerate with `npm run demo` |
 
 ## Run it
 
@@ -246,6 +246,7 @@ src/
   triage/classify.ts        rules, prompt builder, Claude path, escalation guards
 scripts/
   smoke.ts                  crawl real issues and report what the collector saw
+  build-demo.ts             write docs/index.html from a real run (no API, no key on the page)
 evals/
   fixtures.ts               labelled cases and vocabulary regressions
   run.ts                    confusion matrix, precision/recall, gates (rules, offline)

@@ -13,7 +13,8 @@
     "eval:llm": "node --env-file-if-exists=.env -r ts-node/register evals/llm.ts",
     "triage": "ts-node src/cli.ts",
     "test:cli": "ts-node evals/cli.test.ts",
-    "test:action": "ts-node evals/action.test.ts"
+    "test:action": "ts-node evals/action.test.ts",
+    "demo": "ts-node scripts/build-demo.ts"
   },
   "keywords": [
     "github",
