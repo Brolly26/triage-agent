@@ -254,6 +254,7 @@ evals/
   fixtures.ts               labelled cases and vocabulary regressions
   run.ts                    confusion matrix, precision/recall, gates (rules, offline)
   llm.ts                    rules vs Claude, on fixtures or real labelled issues
+  calibration.ts            does the stated confidence track accuracy? (real issues, 5 repos)
   sanitizer.test.ts         structural assertions on the prompt
   client.test.ts            the collector, no network
   triage.test.ts            truncation and escalation regressions
@@ -397,14 +398,52 @@ What it says, and what it does not:
   The fixtures are the rules' own vocabulary, so 100% there means little.
   Nothing here tests semantic prompt injection against a real model.
 
+### Is the stated confidence trustworthy?
+
+`npm run eval:calibration` asks the model about real closed issues from five
+repositories (vscode, deno, react, next.js, node; labels stripped) and
+compares what it says about itself with how often it is right. 81 issues,
+`claude-haiku-5-5`, one run, 2026-10-22; 8 more were held by the hard guards
+and are excluded because they are not about confidence.
+
+| stated confidence | issues | actually right |
+|---|---|---|
+| 0.60 to 0.79 | 5 | 60% |
+| 0.80 to 0.89 | 13 | 85% |
+| 0.90 and above | 63 | 94% |
+
+| if the threshold were | it answers | right when it answers |
+|---|---|---|
+| 0.60 (current) | 100% | 90% |
+| 0.70 | 95% | 92% |
+| 0.80 | 94% | 92% |
+| 0.90 | 78% | 94% |
+| 0.95 | 17% | 100% |
+
+Two things follow:
+
+- **The number is honest.** Within each band the model is right about as often
+  as it says. It is not inflated confidence.
+- **The current threshold does nothing.** The model never reported below 0.60
+  on these issues, so `low_confidence` never fired on the model path. The
+  escalations Claude produced all came from the hard guards. Raising the
+  threshold buys a few points of accuracy at a real cost in coverage (0.90:
+  94% right on 78% of issues).
+
+The constant is **not** changed here. 81 issues cannot pick a threshold, and
+fitting it to this sample is the mistake the rules path already taught this
+repo. What the data supports is that the threshold is a policy choice between
+coverage and error rate, to be set by whoever owns the repository, and that
+0.60 is effectively "never escalate on confidence".
+
 ---
 
 ## Known limitations
 
 - **The model has been scored once, on a small sample.** 49 real issues, one
-  model, one run, no confidence-calibration analysis. Whether Claude's stated
-  confidence tracks its accuracy is not yet measured, and it matters: the
-  escalation threshold (0.6) is a guess applied to a number the model chose.
+  model, one run. A second, larger run (81 issues) measured calibration and
+  found it honest but found the 0.6 threshold inert; see above. Other models,
+  other prompt versions and other repositories are untested.
 - **The fixtures validate their own assumptions.** They were written out of
   the same keyword vocabulary the classifier scores with, so they report a
   health the real measurement contradicts: median winning score 1 against
