@@ -6,13 +6,19 @@ Triages issues from a busy open source repository: classifies them, pulls out
 the structured facts, assigns a priority, drafts a reply, and escalates to a
 human when it should not decide alone.
 
-Status: the deterministic path, the collector and the eval suite work. The
-model path is a skeleton — `classifyWithModel` throws. That order is
-deliberate, and the reason is below.
+Status: the deterministic path, the collector and the eval suite work, and
+the model path is wired to the Claude API with offline tests for its failure
+modes. **The model has not been scored yet**: that needs a key, and the numbers
+will go here when it has been run, not before. The evals came first on
+purpose; the reason is below.
 
 ```bash
 npm install
-npm run check   # typecheck + sanitizer + client + triage + evals. No API key, no network.
+npm run check      # typecheck + sanitizer + client + triage + model + evals. No API key, no network.
+
+# Rules vs model on the same ground truth. Key goes in .env (see .env.example).
+npm run eval:llm                          # the fixtures
+npm run eval:llm -- --live microsoft/vscode   # real closed issues, labelled by maintainers
 ```
 
 ---
@@ -231,9 +237,51 @@ calibration belongs per repository rather than globally.
 
 ---
 
+## The model path
+
+`classifyWithModel` asks the model for one thing: the category and how sure it
+is, through a forced tool call (`record_triage`) whose output is validated
+rather than trusted. Everything else stays deterministic:
+
+- The escalation guards (`guardReason`: injection, security report, empty or
+  truncated body) run on both paths. A payload that fully steers the model
+  still escalates; `model.test.ts` checks that against every injection fixture
+  with a model that answers "question, confidence 1".
+- The drafted reply comes from templates. No text the model writes can reach
+  a reply.
+- If the model flags an injection the regex missed, the issue escalates.
+- Any failure (no key, HTTP error, timeout, no tool call, a category outside
+  the enum, confidence out of range) falls back to the rules **and escalates**
+  with `model_unavailable`. It degrades to a human, never to a guess.
+- Every call writes one JSON line to stderr: model, prompt version, latency,
+  outcome, category, confidence, token usage. Never the key.
+
+### Measuring it against real issues
+
+`npm run eval:llm -- --live owner/repo` fetches closed issues, takes the
+category from the labels a maintainer applied, **strips the labels**, and
+scores both paths. Issues whose labels say nothing or disagree are dropped.
+The rules run without a key; the model column needs one.
+
+First run, rules only (2026-10-22):
+
+| repo | labelled issues | accuracy | escalated | accuracy when not escalated |
+|---|---|---|---|---|
+| microsoft/vscode | 38 | 53% | 92% | 100% |
+| denoland/deno | 10 | 90% | 40% | 100% |
+
+Read with care: 10 issues is anecdote, and labels are a proxy for ground
+truth, not the thing itself. What the table does show matches the smoke test:
+on real text the rules are rarely sure enough to answer, and when they do
+answer they are right. The model has to beat that without giving up the last
+column.
+
+---
+
 ## Known limitations
 
-- **The model path is not implemented.** `classifyWithModel` throws.
+- **The model has not been scored.** The code path is tested offline; how
+  well it classifies is unknown until `npm run eval:llm` runs with a key.
 - **The fixtures validate their own assumptions.** They were written out of
   the same keyword vocabulary the classifier scores with, so they report a
   health the real measurement contradicts: median winning score 1 against
@@ -265,7 +313,7 @@ calibration belongs per repository rather than globally.
 ## Regression checks and CI
 
 The offline suite currently contains 21 fixtures, 26 sanitizer checks, 40 client
-checks, and 5 triage regression cases. Every failing fixture now fails the run;
+checks, 5 triage regression cases and 15 model-path checks. Every failing fixture now fails the run;
 aggregate thresholds remain additional gates, computed without rounding.
 Every escalated fixture must have no draft, and security/corruption cases assert
 priority explicitly.

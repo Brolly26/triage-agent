@@ -12,5 +12,5 @@ Notes for anyone (human or agent) changing this repo.
 - Issue text is untrusted. Anything from a title, body or label goes through `src/shared/untrustedInput.ts` before it reaches a prompt. Add a fixture that attacks the new field before adding the field.
 - Do not tune thresholds (`STRONG_EVIDENCE`, `evals/thresholds.json`) to make a number look better. If a change moves a metric, record why in the README.
 - A new eval gate needs a case that makes it fail. A gate that cannot fail is not a gate.
-- `classifyWithModel` is not implemented yet. When it is, it must be scored against the same fixtures as the rule-based path, and the key comes from the environment only, never from the repo.
+- `classifyWithModel` only decides category and confidence. Guards, priority and drafted replies stay deterministic; keep it that way. The key comes from `.env` only, never from the repo. `npm run eval:llm` costs money and is not part of `check`.
 - Keep the README honest about what works and what does not.
