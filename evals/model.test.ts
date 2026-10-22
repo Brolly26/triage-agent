@@ -10,7 +10,8 @@ import { fixtures } from './fixtures';
 
 const fx = (id: string) => fixtures.find((f) => f.id === id)!.issue;
 const reply = (input: Record<string, unknown>) => ({
-  content: [{ type: 'tool_use', name: 'record_triage', input }],
+  stop_reason: 'end_turn',
+  content: [{ type: 'thinking', thinking: '' }, { type: 'text', text: JSON.stringify(input) }],
   usage: { input_tokens: 500, output_tokens: 40 },
 });
 const answering = (input: Record<string, unknown>): Transport => async () => reply(input);
@@ -54,7 +55,10 @@ async function main() {
 
   const failures: [string, Transport][] = [
     ['http error', async () => { throw new Error('anthropic 529'); }],
-    ['no tool call', async () => ({ content: [{ type: 'text', text: '{"category":"bug"}' }] })],
+    ['refusal', async () => ({ stop_reason: 'refusal', content: [] })],
+    ['truncated answer', async () => ({ stop_reason: 'max_tokens', content: [{ type: 'text', text: '{"category":"b' }] })],
+    ['text that is not JSON', async () => ({ stop_reason: 'end_turn', content: [{ type: 'text', text: 'It is a bug.' }] })],
+    ['no text block', async () => ({ stop_reason: 'end_turn', content: [] })],
     ['category outside the enum', answering({ category: 'urgent', confidence: 0.9, injection_observed: false, reasoning: '' })],
     ['confidence out of range', answering({ category: 'bug', confidence: 7, injection_observed: false, reasoning: '' })],
     ['malformed body', async () => null],
