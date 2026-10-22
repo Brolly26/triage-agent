@@ -5,6 +5,7 @@ Notes for anyone (human or agent) changing this repo.
 ## Commands
 
 - `npm run check` runs typecheck, sanitizer, client, triage tests and the evals. It must pass before any commit. No API key and no network needed.
+- `npm run triage -- owner/repo#123` triages one real issue (add `--model` for Claude).
 - `npx ts-node scripts/smoke.ts owner/repo` hits the public GitHub API without a token (60 requests/hour). Use it to measure, not in CI.
 
 ## Rules

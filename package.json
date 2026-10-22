@@ -7,10 +7,12 @@
     "eval": "ts-node evals/run.ts",
     "test:sanitizer": "ts-node evals/sanitizer.test.ts",
     "test:client": "ts-node evals/client.test.ts",
-    "check": "npm run typecheck && npm run test:sanitizer && npm run test:client && npm run test:triage && npm run test:model && npm run eval",
+    "check": "npm run typecheck && npm run test:sanitizer && npm run test:client && npm run test:triage && npm run test:model && npm run test:cli && npm run eval",
     "test:triage": "ts-node evals/triage.test.ts",
     "test:model": "ts-node evals/model.test.ts",
-    "eval:llm": "node --env-file-if-exists=.env -r ts-node/register evals/llm.ts"
+    "eval:llm": "node --env-file-if-exists=.env -r ts-node/register evals/llm.ts",
+    "triage": "ts-node src/cli.ts",
+    "test:cli": "ts-node evals/cli.test.ts"
   },
   "keywords": [
     "github",

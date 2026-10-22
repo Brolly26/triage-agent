@@ -278,3 +278,15 @@ export async function fetchIssues(opts: FetchOptions): Promise<Issue[]> {
 
   return out;
 }
+
+/** One issue by number. A pull request is an error here, not a silent null:
+ *  someone who typed a PR number should be told, not shown nothing. */
+export async function fetchIssue(opts: Omit<FetchOptions, 'limit' | 'state'> & { number: number }): Promise<Issue> {
+  const url = `https://api.github.com/repos/${opts.owner}/${opts.repo}/issues/${opts.number}`;
+  const res: Response = await requestWithRetry(url, opts);
+  const raw: any = await res.json();
+  if (raw?.pull_request) throw new GitHubError(`#${opts.number} is a pull request, not an issue`, res.status, false);
+  const issue = normalizeIssue(raw, `${opts.owner}/${opts.repo}`, opts.onEvent);
+  if (!issue) throw new GitHubError(`#${opts.number} could not be read as an issue`, res.status, false);
+  return issue;
+}

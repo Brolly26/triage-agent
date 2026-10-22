@@ -47,7 +47,8 @@ GitHub API ──► collector ──► sanitiser ──► classifier ──�
 |---|---|
 | Collector, sanitiser, rule-based classifier, eval suite | working, tested offline in CI |
 | Claude path | wired and tested offline for its failure modes; **not scored yet**, because that needs an API key. The numbers go here once it has been run. |
-| CLI, GitHub Action, demo page | not built |
+| CLI (`npm run triage`) | working, one issue at a time |
+| GitHub Action, demo page | not built |
 
 ## Run it
 
@@ -56,6 +57,10 @@ Needs Node 22+.
 ```bash
 npm install
 npm run check      # typecheck + all tests + evals. No API key, no network.
+
+npm run triage -- denoland/deno#37025            # triage one real issue (rules, no key)
+npm run triage -- denoland/deno#37025 --model    # same, through Claude
+npm run triage -- denoland/deno#37025 --json
 
 npx ts-node scripts/smoke.ts microsoft/vscode   # crawl real issues, no token (60 requests/hour)
 
@@ -212,6 +217,7 @@ modes you cannot reproduce on demand against the real API.
 
 ```
 src/
+  cli.ts                    triage one issue from the terminal
   github/client.ts          pagination, rate limits, retries, normalisation
   shared/types.ts           domain types, source-agnostic
   shared/untrustedInput.ts  hardening for third-party text
@@ -225,6 +231,7 @@ evals/
   sanitizer.test.ts         structural assertions on the prompt
   client.test.ts            the collector, no network
   triage.test.ts            truncation and escalation regressions
+  cli.test.ts               target parsing, single-issue fetch, output format
   model.test.ts             the Claude path with a fake transport: validation, fallback, guards
   thresholds.json
 ```
