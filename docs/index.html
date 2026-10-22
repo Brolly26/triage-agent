@@ -31,7 +31,7 @@ a{color:inherit}.scroll{overflow-x:auto}
 <p class="mute">Recorded results, generated 2026-10-22 by <code>scripts/build-demo.ts</code>. This page calls no API and holds no key.</p>
 <p>A classifier for GitHub issues that knows when not to decide alone. <a href="https://github.com/Brolly26/triage-agent">Source and README</a>.</p>
 
-<div class="note"><strong>Status.</strong> The Claude path is built and tested offline, but <strong>has not been scored</strong>: that needs an API key. Its row says so instead of showing a number.</div>
+<div class="note"><strong>Status.</strong> The model row below was recorded with <code>claude-haiku-5-5</code>.</div>
 
 <h2>Rules vs model, on real closed issues</h2>
 <p class="mute">Ground truth is the label a maintainer applied. The labels are removed before classifying. Issues whose labels say nothing, or disagree, are dropped.</p>
@@ -39,9 +39,11 @@ a{color:inherit}.scroll{overflow-x:auto}
 <tr><th>Path</th><th>Repository</th><th class="n">Issues</th><th class="n">Accuracy</th><th class="n">Escalated</th><th class="n">Accuracy when it answers</th></tr>
 <tr><td>rules</td><td>microsoft/vscode</td><td class="n">39</td><td class="n">54%</td><td class="n">92%</td><td class="n">100%</td></tr>
 <tr><td>rules</td><td>denoland/deno</td><td class="n">10</td><td class="n">90%</td><td class="n">40%</td><td class="n">100%</td></tr>
-<tr><td>Claude</td><td colspan="5" class="mute">not measured yet</td></tr>
+<tr><td>claude-haiku-5-5</td><td>fixtures</td><td class="n">20</td><td class="n">90%</td><td class="n">43%</td><td class="n">92%</td></tr>
+<tr><td>claude-haiku-5-5</td><td>microsoft/vscode</td><td class="n">39</td><td class="n">82%</td><td class="n">15%</td><td class="n">88%</td></tr>
+<tr><td>claude-haiku-5-5</td><td>denoland/deno</td><td class="n">10</td><td class="n">100%</td><td class="n">0%</td><td class="n">100%</td></tr>
 </table></div>
-<p>The pattern to read: on real text the rules are rarely sure enough to answer, and when they do answer they are usually right. A system that hands the rest to a human is behaving correctly; one that guessed would look better here and be worse.</p>
+<p>The pattern to read: on real text the rules are rarely sure enough to answer, and right when they do. The model answers far more often and is wrong on a share of what it answers alone. That is a trade of coverage for caution, and whether it is worth it depends on what a wrong automatic label costs.</p>
 <p class="mute">Small samples. Treat these as anecdotes, not benchmarks.</p>
 
 <h2>Real issues, one by one</h2>

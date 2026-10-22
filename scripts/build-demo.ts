@@ -116,7 +116,7 @@ a{color:inherit}.scroll{overflow-x:auto}
 ${summary.map((s) => `<tr><td>rules</td><td>${esc(s.spec)}</td><td class="n">${s.n}</td><td class="n">${s.accuracy}</td><td class="n">${s.escalated}</td><td class="n">${s.auto}</td></tr>`).join('\n')}
 ${model ? model.rows.map((s) => `<tr><td>${esc(model.model)}</td><td>${esc(s.spec)}</td><td class="n">${s.n}</td><td class="n">${esc(s.accuracy)}</td><td class="n">${esc(s.escalated)}</td><td class="n">${esc(s.auto)}</td></tr>`).join('\n') : '<tr><td>Claude</td><td colspan="5" class="mute">not measured yet</td></tr>'}
 </table></div>
-<p>The pattern to read: on real text the rules are rarely sure enough to answer, and when they do answer they are usually right. A system that hands the rest to a human is behaving correctly; one that guessed would look better here and be worse.</p>
+<p>The pattern to read: on real text the rules are rarely sure enough to answer, and right when they do. ${model ? 'The model answers far more often and is wrong on a share of what it answers alone. That is a trade of coverage for caution, and whether it is worth it depends on what a wrong automatic label costs.' : ''}</p>
 <p class="mute">Small samples. Treat these as anecdotes, not benchmarks.</p>
 
 <h2>Real issues, one by one</h2>

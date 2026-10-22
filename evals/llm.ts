@@ -13,12 +13,17 @@
  * model. The offline guarantees live in model.test.ts.
  */
 
+import { writeFileSync, existsSync, readFileSync, mkdirSync } from 'node:fs';
 import { fixtures } from './fixtures';
 import { classifyWithRules, classifyWithModel, DEFAULT_MODEL } from '../src/triage/classify';
 import { fetchIssues } from '../src/github/client';
 import { Category, Issue, Triage } from '../src/shared/types';
 
-interface Case { id: string; issue: Issue; expected?: Category; mustEscalate?: boolean; injection?: boolean }
+/** `mustEscalate` is for the guards every path shares (security, injection, empty,
+ *  truncated). `softEscalate` is a `low_confidence` expectation: it describes how
+ *  the rules behaved on that text, not a fact about the issue, so it is reported
+ *  but not gated. */
+interface Case { id: string; issue: Issue; expected?: Category; mustEscalate?: boolean; softEscalate?: boolean; injection?: boolean }
 
 const hasKey = Boolean(process.env.ANTHROPIC_API_KEY);
 const model = process.env.TRIAGE_MODEL ?? DEFAULT_MODEL;
@@ -52,7 +57,8 @@ function fixtureCases(): Case[] {
     id: f.id,
     issue: f.issue,
     expected: f.expect.category,
-    mustEscalate: f.expect.escalate,
+    mustEscalate: f.expect.escalate && f.expect.reason !== 'low_confidence',
+    softEscalate: f.expect.escalate && f.expect.reason === 'low_confidence',
     injection: f.id.startsWith('injection-'),
   }));
 }
@@ -66,6 +72,8 @@ function score(name: string, cases: Case[], results: Triage[]) {
   const autoCorrect = auto.filter(({ c, t }) => t.category === c.expected).length;
   const missed = cases.filter((c, i) => c.mustEscalate && !results[i].escalate).length;
   const leaked = cases.filter((c, i) => c.injection && results[i].draftReply !== null).length;
+  const soft = cases.filter((c, i) => c.softEscalate && !results[i].escalate).map((c) => c.id);
+  if (soft.length) console.log(`  ${name}: ${soft.length} low_confidence expectation(s) not matched (not gated): ${soft.join(', ')}`);
   const pct = (n: number, d: number) => (d === 0 ? '—' : ((n / d) * 100).toFixed(0) + '%');
   console.log(
     '  ' + name.padEnd(8) +
@@ -74,7 +82,12 @@ function score(name: string, cases: Case[], results: Triage[]) {
     pct(autoCorrect, auto.length).padStart(16) +
     String(missed).padStart(10) + String(leaked).padStart(9),
   );
-  return { missed, leaked };
+  return {
+    missed, leaked, n: scored.length,
+    accuracy: pct(correct, scored.length),
+    escalated: pct(results.filter((t) => t.escalate).length, results.length),
+    auto: pct(autoCorrect, auto.length),
+  };
 }
 
 async function main() {
@@ -101,7 +114,18 @@ async function main() {
   const llm: Triage[] = [];
   // Sequential on purpose: a few dozen calls, and the trace lines stay in order.
   for (const c of cases) llm.push(await classifyWithModel(c.issue));
-  const { missed, leaked } = score('llm', cases, llm);
+  const { missed, leaked, ...stats } = score('llm', cases, llm);
+
+  if (process.argv.includes('--save')) {
+    const file = 'docs/model-results.json';
+    const prev = existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : { rows: [] };
+    const spec = live ?? 'fixtures';
+    const rows = (prev.model === model ? prev.rows : []).filter((r: { spec: string }) => r.spec !== spec);
+    rows.push({ spec, n: stats.n, accuracy: stats.accuracy, escalated: stats.escalated, auto: stats.auto });
+    mkdirSync('docs', { recursive: true });
+    writeFileSync(file, JSON.stringify({ model, recorded: new Date().toISOString().slice(0, 10), rows }, null, 2) + '\n');
+    console.log(`\n  saved to ${file}`);
+  }
 
   const fellBack = llm.filter((t) => t.escalationReason === 'model_unavailable').length;
   if (fellBack) console.log(`\n  ${fellBack} call(s) fell back to rules; see the trace lines on stderr.`);

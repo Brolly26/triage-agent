@@ -1,0 +1,27 @@
+{
+  "model": "claude-haiku-5-5",
+  "recorded": "2026-10-22",
+  "rows": [
+    {
+      "spec": "fixtures",
+      "n": 20,
+      "accuracy": "90%",
+      "escalated": "43%",
+      "auto": "92%"
+    },
+    {
+      "spec": "microsoft/vscode",
+      "n": 39,
+      "accuracy": "82%",
+      "escalated": "15%",
+      "auto": "88%"
+    },
+    {
+      "spec": "denoland/deno",
+      "n": 10,
+      "accuracy": "100%",
+      "escalated": "0%",
+      "auto": "100%"
+    }
+  ]
+}

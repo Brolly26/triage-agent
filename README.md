@@ -48,7 +48,7 @@ GitHub API ──► collector ──► sanitiser ──► classifier ──�
 | | |
 |---|---|
 | Collector, sanitiser, rule-based classifier, eval suite | working, tested offline in CI |
-| Claude path | wired and tested offline for its failure modes; **not scored yet**, because that needs an API key. The numbers go here once it has been run. |
+| Claude path | wired, tested offline for its failure modes, and **scored once** against the rules on 21 fixtures and 49 real labelled issues (see "Rules vs Claude" below). Small samples, one model, one run. |
 | CLI (`npm run triage`) | working, one issue at a time |
 | GitHub Action (`.github/workflows/triage.yml`) | built and tested offline; **not yet run on a live issue** |
 | Results page (`docs/index.html`) | built from a real run; regenerate with `npm run demo` |
@@ -99,8 +99,9 @@ cheap to undo and a posted reply is not.
   shell command, so a hostile title cannot become a command.
 - Try it without touching GitHub: `DRY_RUN=true GITHUB_EVENT_PATH=event.json GITHUB_REPOSITORY=o/r npx ts-node src/action.ts`.
 
-Given what the measurements say, expect most issues to land on `needs-human`
-until the model has been scored; that is the system being honest, not broken.
+With no key the Action runs the rules, which on real traffic escalate most
+issues to `needs-human`; with a key it runs Claude, which answers far more
+often and is wrong on roughly one in eight of those (see the table below).
 
 ---
 
@@ -356,27 +357,54 @@ effort `low`; set `TRIAGE_MODEL` to compare others. Everything else stays determ
 `npm run eval:llm -- --live owner/repo` fetches closed issues, takes the
 category from the labels a maintainer applied, **strips the labels**, and
 scores both paths. Issues whose labels say nothing or disagree are dropped.
-The rules run without a key; the model column needs one.
+`--save` records the run in `docs/model-results.json`, which the results page
+reads.
 
-First run, rules only (2026-10-22):
+### Rules vs Claude
 
-| repo | labelled issues | accuracy | escalated | accuracy when not escalated |
-|---|---|---|---|---|
-| microsoft/vscode | 38 | 53% | 92% | 100% |
-| denoland/deno | 10 | 90% | 40% | 100% |
+One run on 2026-10-22 with `claude-haiku-5-5` at low effort:
 
-Read with care: 10 issues is anecdote, and labels are a proxy for ground
-truth, not the thing itself. What the table does show matches the smoke test:
-on real text the rules are rarely sure enough to answer, and when they do
-answer they are right. The model has to beat that without giving up the last
-column.
+| set | issues | path | accuracy | escalated | accuracy when it answers |
+|---|---|---|---|---|---|
+| fixtures | 20 scored | rules | 100% | 62% | 100% |
+| fixtures | 20 scored | Claude | 90% | 43% | 92% |
+| microsoft/vscode | 39 | rules | 54% | 92% | 100% |
+| microsoft/vscode | 39 | Claude | 82% | 15% | 88% |
+| denoland/deno | 10 | rules | 90% | 40% | 100% |
+| denoland/deno | 10 | Claude | 100% | 0% | 100% |
+
+What it says, and what it does not:
+
+- **Claude does what the rules could not.** On real vscode issues the rules
+  answered 8% of the time; Claude answered 85%, and was right on 82% overall.
+  This is the gap the smoke test predicted.
+- **It trades caution for coverage.** The rules were right every time they
+  answered because they almost never answered. Claude answers nearly always and
+  is wrong on about one in eight of the issues it answers alone (88%). Whether
+  that is acceptable depends on what a wrong auto-label costs, which is a
+  decision for the maintainers, not a number this repo can settle.
+- **The hard guards held.** 0 missed escalations on security, injection, empty
+  or truncated issues, and 0 drafted replies on the injection fixtures. These
+  are the gates; accuracy is reported, not gated.
+- **Four fixtures expected `low_confidence` and Claude answered instead**
+  (`ambiguous` and three `bug-inflection`). The `bug-inflection` ones were
+  written to test the rules' vocabulary, and Claude answered "bug", which is
+  right. `ambiguous` is the interesting one: it is deliberately unclear and
+  Claude answered "question" at 0.7 instead of escalating. The eval now reports
+  these separately rather than counting them as missed escalations, because the
+  expectation described how the rules behave, not a fact about the issue.
+- **Caveats.** 49 real issues, one model, one run. Labels are a proxy for truth.
+  The fixtures are the rules' own vocabulary, so 100% there means little.
+  Nothing here tests semantic prompt injection against a real model.
 
 ---
 
 ## Known limitations
 
-- **The model has not been scored.** The code path is tested offline; how
-  well it classifies is unknown until `npm run eval:llm` runs with a key.
+- **The model has been scored once, on a small sample.** 49 real issues, one
+  model, one run, no confidence-calibration analysis. Whether Claude's stated
+  confidence tracks its accuracy is not yet measured, and it matters: the
+  escalation threshold (0.6) is a guess applied to a number the model chose.
 - **The fixtures validate their own assumptions.** They were written out of
   the same keyword vocabulary the classifier scores with, so they report a
   health the real measurement contradicts: median winning score 1 against
