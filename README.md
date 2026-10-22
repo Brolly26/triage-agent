@@ -240,8 +240,9 @@ calibration belongs per repository rather than globally.
 ## The model path
 
 `classifyWithModel` asks the model for one thing: the category and how sure it
-is, through a forced tool call (`record_triage`) whose output is validated
-rather than trusted. Everything else stays deterministic:
+is, through the official SDK with structured outputs (a JSON schema), and the
+answer is validated rather than trusted. Default model `claude-opus-5-5` at
+effort `low`; set `TRIAGE_MODEL` to compare others. Everything else stays deterministic:
 
 - The escalation guards (`guardReason`: injection, security report, empty or
   truncated body) run on both paths. A payload that fully steers the model
@@ -250,8 +251,11 @@ rather than trusted. Everything else stays deterministic:
 - The drafted reply comes from templates. No text the model writes can reach
   a reply.
 - If the model flags an injection the regex missed, the issue escalates.
-- Any failure (no key, HTTP error, timeout, no tool call, a category outside
-  the enum, confidence out of range) falls back to the rules **and escalates**
+- Server-side refusal fallbacks are on (`fallbacks: "default"`). A decline
+  that survives them is treated like any other failure.
+- Any failure (no key, HTTP error after the SDK's retries, timeout, refusal,
+  truncated or non-JSON answer, a category outside the enum, confidence out of
+  range) falls back to the rules **and escalates**
   with `model_unavailable`. It degrades to a human, never to a guess.
 - Every call writes one JSON line to stderr: model, prompt version, latency,
   outcome, category, confidence, token usage. Never the key.
@@ -313,7 +317,7 @@ column.
 ## Regression checks and CI
 
 The offline suite currently contains 21 fixtures, 26 sanitizer checks, 40 client
-checks, 5 triage regression cases and 15 model-path checks. Every failing fixture now fails the run;
+checks, 5 triage regression cases and 18 model-path checks. Every failing fixture now fails the run;
 aggregate thresholds remain additional gates, computed without rounding.
 Every escalated fixture must have no draft, and security/corruption cases assert
 priority explicitly.
