@@ -4,6 +4,8 @@
 
 A triage classifier for GitHub issues that knows when not to decide alone.
 
+**[Recorded results on real issues](https://brolly26.github.io/triage-agent/)**
+
 Given an issue, it says whether it is a `bug`, `feature`, `question` or
 `duplicate`, extracts the facts a maintainer needs (version, platform, repro
 steps, stack trace), assigns a priority and drafts a reply. When it should not
