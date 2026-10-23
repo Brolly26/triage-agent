@@ -50,7 +50,7 @@ GitHub API ──► collector ──► sanitiser ──► classifier ──�
 | Collector, sanitiser, rule-based classifier, eval suite | working, tested offline in CI |
 | Claude path | wired, tested offline for its failure modes, and **scored once** against the rules on 21 fixtures and 49 real labelled issues (see "Rules vs Claude" below). Small samples, one model, one run. |
 | CLI (`npm run triage`) | working, one issue at a time |
-| GitHub Action (`.github/workflows/triage.yml`) | built and tested offline; **not yet run on a live issue** |
+| GitHub Action (`.github/workflows/triage.yml`) | built, tested offline, and **run on two live test issues** in this repo (rules path, no key): [#1](https://github.com/Brolly26/triage-agent/issues/1) got `triage:bug` + `priority:p2`; [#2](https://github.com/Brolly26/triage-agent/issues/2), an injection payload, also got `needs-human` and no reply |
 | Results page (`docs/index.html`) | built from a real run; regenerate with `npm run demo` |
 
 ## Run it
